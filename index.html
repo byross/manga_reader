@@ -3,13 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Webtoon Reader — 100% Size</title>
+  <title>Local Webtoon Reader — 100% Size + Chapters + Progress</title>
   <meta name="theme-color" content="#111" />
+  <!-- Optional PWA (install/offline) needs two tiny extra files:
+       1) manifest.webmanifest  2) sw.js
+       This single HTML works standalone without them. If you add those files,
+       the script below will auto-register the service worker. -->
+  <link rel="manifest" href="manifest.webmanifest" />
   <style>
     :root { --bg:#0f0f12; --fg:#e8e8ea; --muted:#9aa0a6; --accent:#7dd3fc; }
     * { box-sizing: border-box; }
     html,body { height:100%; }
-    body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple Color Emoji, Noto Color Emoji, sans-serif; color:var(--fg); background:var(--bg); }
+    body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple Color Emoji, Noto Color Emoji, sans-serif; color:var(--fg); background:var(--bg); }
     header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:color-mix(in srgb, var(--bg) 85%, transparent); border-bottom:1px solid #22252a; }
     .bar { display:flex; gap:.5rem; align-items:center; padding:.75rem 1rem; max-width:1100px; margin:0 auto; }
     .title { font-weight:600; letter-spacing:.3px; }
@@ -23,183 +28,384 @@
     #dropzone { border:2px dashed #2a2e35; border-radius:16px; padding:2rem; text-align:center; color:var(--muted); margin:1rem 0 1.5rem; }
     #dropzone.drag { border-color:var(--accent); color:var(--fg); }
 
-    .grid { display:block; }
+    .controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.5rem 0 1rem; }
+    .hint { color:var(--muted); font-size:12px; }
+
+    .chapter-list { display:flex; flex-wrap:wrap; gap:.5rem; margin:.5rem 0 1rem; }
+    .chip { padding:.35rem .6rem; border:1px solid #2a2e35; border-radius:999px; cursor:pointer; user-select:none; }
+    .chip.active { border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+
+    #reader.fit img.page { width:100%; height:auto; max-width:100%; }
     figure { margin:0 0 24px; }
     img.page { display:block; max-width:none; height:auto; image-rendering:auto; background:#0b0b0e; border-radius:8px; box-shadow: 0 0 0 1px #1b1f26; }
 
-    .hint { color:var(--muted); font-size:12px; }
+    .footer { text-align:center; margin:1.25rem 0 2rem; }
     .hidden { display:none !important; }
-
-    /* 100% size by default; fit-to-width when toggled */
-    .fit img.page { width:100%; height:auto; max-width:100%; }
   </style>
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="title">Local Webtoon Reader · 100% size</div>
+      <div class="title">Local Webtoon Reader · Chapters + Progress</div>
       <div class="spacer"></div>
-      <label class="btn" id="open-folder">📂 Open Folder</label>
+      <label class="btn" id="open-folder">📂 Open Root Folder</label>
       <input id="dir-input" type="file" webkitdirectory directory multiple class="hidden" />
+      <button id="continueBtn" title="Jump to last position" disabled>Continue</button>
       <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit-to-Width: OFF</button>
       <select id="sort">
         <option value="name">Sort: Name (A→Z)</option>
         <option value="name-desc">Sort: Name (Z→A)</option>
-        <option value="time">Sort: Time (Old→New)</option>
-        <option value="time-desc">Sort: Time (New→Old)</option>
       </select>
     </div>
   </header>
 
   <main>
     <div id="dropzone">
-      <p>Drop a folder or images here — or click <b>Open Folder</b>.<br>Default view is <b>100% original size</b> (no scaling). Toggle <b>Fit-to-Width</b> if needed.</p>
-      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF. Nothing is uploaded — runs 100% locally.</p>
+      <p>Drop a <b>root folder</b> (chapters as subfolders) — or click <b>Open Root Folder</b>。</p>
+      <p>預設 <b>100% 原尺寸</b>，可切換 <b>Fit-to-Width</b>。會自動建立章節索引並在本機記住進度（localStorage）。</p>
+      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · Nothing is uploaded — 100% local.</p>
     </div>
-    <div class="hint" id="count"></div>
-    <div id="container" class="grid"></div>
+
+    <div id="meta" class="hint"></div>
+
+    <div class="controls hidden" id="chapControls">
+      <div class="hint" id="seriesName"></div>
+      <div class="chapter-list" id="chapters"></div>
+    </div>
+
+    <div id="reader"></div>
+    <div class="footer hidden" id="navFooter">
+      <button id="prevChap">← Prev Chapter</button>
+      <button id="nextChap">Next Chapter →</button>
+    </div>
   </main>
 
   <script>
   ;(() => {
-    const container = document.getElementById('container');
     const dropzone = document.getElementById('dropzone');
     const dirInput = document.getElementById('dir-input');
     const openBtn = document.getElementById('open-folder');
     const fitToggle = document.getElementById('fitToggle');
     const sortSel = document.getElementById('sort');
-    const countEl = document.getElementById('count');
+    const continueBtn = document.getElementById('continueBtn');
 
-    const IMG_EXT = ['.jpg','.jpeg','.png','.gif','.webp','.avif'];
+    const chapControls = document.getElementById('chapControls');
+    const chaptersEl = document.getElementById('chapters');
+    const seriesNameEl = document.getElementById('seriesName');
+    const reader = document.getElementById('reader');
+    const navFooter = document.getElementById('navFooter');
+    const prevBtn = document.getElementById('prevChap');
+    const nextBtn = document.getElementById('nextChap');
+    const metaEl = document.getElementById('meta');
 
-    let items = []; // {name, url, lastModified}
+    const IMG_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
+
     let fit = false;
+    let indexJson = null; // {seriesId, rootName, chapters: [{id,name,files:[]}]}
+    let currentChapterIdx = -1;
 
-    function ext(name){
-      const i = name.lastIndexOf('.');
-      return i>=0 ? name.slice(i).toLowerCase() : '';
+    // ---- storage helpers ----
+    const keyIndex = (sid) => `webtoon.index.${sid}`;
+    const keyProg  = (sid) => `webtoon.progress.${sid}`;
+
+    function saveIndexCache(obj){ localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj)); }
+    function loadIndexCache(sid){ const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; }
+
+    function saveProgress(seriesId, chapterId, fileRelPath) {
+      localStorage.setItem(keyProg(seriesId), JSON.stringify({
+        seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now()
+      }));
+      continueBtn.disabled = false;
     }
-    function isImg(name){ return IMG_EXT.includes(ext(name)); }
-
-    function naturalKey(str){
-      return str.toLowerCase().split(/(\d+)/).map(s => (s.match(/^\d+$/) ? Number(s) : s));
+    function loadProgress(seriesId) {
+      const raw = localStorage.getItem(keyProg(seriesId));
+      return raw ? JSON.parse(raw) : null;
     }
 
-    function sortItems(mode){
-      if(mode==='name') items.sort((a,b)=>naturalKey(a.name) < naturalKey(b.name) ? -1 : 1);
-      else if(mode==='name-desc') items.sort((a,b)=>naturalKey(a.name) > naturalKey(b.name) ? -1 : 1);
-      else if(mode==='time') items.sort((a,b)=> (a.lastModified||0) - (b.lastModified||0));
-      else if(mode==='time-desc') items.sort((a,b)=> (b.lastModified||0) - (a.lastModified||0));
+    // ---- utilities ----
+    function naturalSort(a,b){
+      return a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' });
     }
 
-    function render(){
-      container.classList.toggle('fit', fit);
-      container.innerHTML = '';
-      for(const it of items){
+    async function sha1(str){
+      const data = new TextEncoder().encode(str);
+      const buf = await crypto.subtle.digest('SHA-1', data);
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function fingerprintRoot(rootHandle, chapters){
+      // Simple fingerprint based on rootName + chapter names + first/last file names/count
+      const parts = [rootHandle.name];
+      for (const ch of chapters){
+        parts.push(ch.name, String(ch.files.length), ch.files[0]||'', ch.files[ch.files.length-1]||'');
+      }
+      return await sha1(parts.join('|'));
+    }
+
+    function setFit(val){
+      fit = val; fitToggle.textContent = `Fit-to-Width: ${fit? 'ON':'OFF'}`;
+      reader.classList.toggle('fit', fit);
+    }
+
+    // ---- chapter rendering ----
+    function renderChips(){
+      chaptersEl.innerHTML = '';
+      indexJson.chapters.forEach((ch, i)=>{
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (i===currentChapterIdx ? ' active':'');
+        chip.textContent = ch.name;
+        chip.title = `${ch.files.length} page(s)`;
+        chip.addEventListener('click', ()=>loadChapter(i));
+        chaptersEl.appendChild(chip);
+      });
+    }
+
+    function updateNavButtons(){
+      navFooter.classList.toggle('hidden', currentChapterIdx<0);
+      prevBtn.disabled = currentChapterIdx<=0;
+      nextBtn.disabled = currentChapterIdx>= indexJson.chapters.length-1;
+    }
+
+    function observeProgress(images, chapter){
+      const io = new IntersectionObserver((entries)=>{
+        // Take the most visible nearing viewport as current
+        const visible = entries
+          .filter(e=>e.isIntersecting)
+          .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible){
+          const file = visible.target.getAttribute('data-rel');
+          saveProgress(indexJson.seriesId, chapter.id, file);
+        }
+      }, { root:null, threshold:[0.5, 0.75] });
+      images.forEach(img=> io.observe(img));
+    }
+
+    function renderChapter(chapter){
+      reader.innerHTML = '';
+      const imgs = [];
+      chapter.files.forEach(rel => {
         const fig = document.createElement('figure');
         const img = document.createElement('img');
         img.className = 'page';
-        img.alt = it.name;
-        img.src = it.url;
+        img.alt = rel;
+        img.setAttribute('data-rel', rel);
         img.loading = 'lazy';
+        // URL.createObjectURL is not available here because we are using relative path from FileSystemHandle
+        // We'll set src later when we have File objects. To keep it simple, we attach a loader per chapter.
         fig.appendChild(img);
-        container.appendChild(fig);
-      }
-      countEl.textContent = items.length ? `${items.length} image(s) loaded` : '';
+        reader.appendChild(fig);
+        imgs.push(img);
+      });
+      updateNavButtons();
+      // Attach observer after src set in loadChapter()
+      return imgs;
     }
 
-    async function readFromDirectoryHandle(dirHandle){
-      const out = [];
-      for await (const entry of dirHandle.values()){
-        try{
-          if(entry.kind === 'file'){
-            if(isImg(entry.name)){
-              const file = await entry.getFile();
-              out.push({ name: entry.name, url: URL.createObjectURL(file), lastModified: file.lastModified });
+    async function loadChapter(idx){
+      currentChapterIdx = idx;
+      renderChips();
+      const chapter = indexJson.chapters[idx];
+      const imgs = renderChapter(chapter);
+      // We stored in chapter._filesBlob during index build for speed
+      for (let i=0;i<imgs.length;i++){
+        const f = chapter._filesBlob[i];
+        imgs[i].src = URL.createObjectURL(f);
+      }
+      // Save initial progress to chapter start
+      saveProgress(indexJson.seriesId, chapter.id, chapter.files[0]);
+      // Observe scroll to refine lastFile
+      observeProgress(imgs, chapter);
+      window.scrollTo({ top:0, behavior:'instant' });
+    }
+
+    prevBtn.addEventListener('click', ()=> { if (currentChapterIdx>0) loadChapter(currentChapterIdx-1); });
+    nextBtn.addEventListener('click', ()=> { if (currentChapterIdx<indexJson.chapters.length-1) loadChapter(currentChapterIdx+1); });
+
+    // ---- directory scanning (chapters = subfolders) ----
+    async function buildIndexFromHandle(rootHandle){
+      const chapters = [];
+      for await (const entry of rootHandle.values()){
+        if (entry.kind === 'directory'){
+          const files = [];
+          for await (const fe of entry.values()){
+            if (fe.kind === 'file' && IMG_RE.test(fe.name)){
+              const file = await fe.getFile();
+              files.push({ rel: `${entry.name}/${fe.name}`, file });
             }
-          } else if (entry.kind === 'directory') {
-            // recurse one level (optional). Comment out if you want flat only.
-            out.push(...await readFromDirectoryHandle(entry));
           }
-        }catch(err){ console.warn('Skip entry error:', err); }
+          if (files.length){
+            files.sort((a,b)=> naturalSort(a.rel, b.rel));
+            chapters.push({ id: '', name: entry.name, files: files.map(f=>f.rel), _filesBlob: files.map(f=>f.file) });
+          }
+        }
       }
-      return out;
+      // Sort chapters by folder natural order
+      chapters.sort((a,b)=> naturalSort(a.name, b.name));
+      // Assign incremental IDs
+      chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
+      const sid = await fingerprintRoot(rootHandle, chapters);
+      const idx = { seriesId: sid, rootName: rootHandle.name, chapters, builtAt: Date.now() };
+      saveIndexCache(idx);
+      return idx;
     }
 
-    async function pickDirectory(){
+    function updateMeta(){
+      const countCh = indexJson?.chapters?.length || 0;
+      const countPg = indexJson?.chapters?.reduce((s,c)=>s+c.files.length,0) || 0;
+      metaEl.textContent = countCh ? `${indexJson.rootName} — ${countCh} chapter(s), ${countPg} page(s)` : '';
+    }
+
+    async function pickRoot(){
       if ('showDirectoryPicker' in window) {
         try{
           const handle = await window.showDirectoryPicker({ mode: 'read' });
-          items = await readFromDirectoryHandle(handle);
-          sortItems(sortSel.value);
-          render();
+          await initFromHandle(handle);
         }catch(err){ if(err && err.name!=='AbortError') alert('Failed to open folder: '+err.message); }
       } else {
-        // Fallback: trigger <input webkitdirectory>
         dirInput.click();
       }
     }
 
-    async function handleFileList(fileList){
-      const out = [];
-      for (const file of fileList) {
-        if (isImg(file.name)) out.push({ name: file.webkitRelativePath || file.name, url: URL.createObjectURL(file), lastModified: file.lastModified });
+    async function initFromHandle(handle){
+      indexJson = await buildIndexFromHandle(handle);
+      continueBtn.disabled = !loadProgress(indexJson.seriesId);
+      chapControls.classList.remove('hidden');
+      seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+      renderChips();
+      updateMeta();
+      // Auto-continue if we have progress
+      const p = loadProgress(indexJson.seriesId);
+      if (p){
+        const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
+        await loadChapter(i>=0? i: 0);
+        // Scroll to last file if present
+        if (p.lastFile){
+          const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
+          if (target) target.scrollIntoView({behavior:'instant', block:'start'});
+        }
+      } else {
+        await loadChapter(0);
       }
-      items = out;
-      sortItems(sortSel.value);
-      render();
     }
 
-    // UI events
-    openBtn.addEventListener('click', pickDirectory);
+    // Fallback for <input webkitdirectory>
+    dirInput.addEventListener('change', async (e)=>{
+      const files = [...(e.target.files||[])].filter(f=> IMG_RE.test(f.name));
+      if (!files.length) return;
+      // Build pseudo root/chapters by inferring first path segment
+      const map = new Map(); // chapName -> files
+      for (const f of files){
+        const path = f.webkitRelativePath || f.name;
+        const seg = path.split('/');
+        const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []);
+        map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
+      }
+      const chapters = [...map.entries()].map(([name, arr])=>{
+        arr.sort((a,b)=> naturalSort(a.rel, b.rel));
+        return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
+      }).sort((a,b)=> naturalSort(a.name,b.name));
+      chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
+      const sid = await sha1('fallback|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
+      indexJson = { seriesId: sid, rootName: 'Local', chapters, builtAt: Date.now() };
+      saveIndexCache(indexJson);
 
-    dirInput.addEventListener('change', (e)=>{
-      if (e.target.files && e.target.files.length) handleFileList(e.target.files);
+      continueBtn.disabled = !loadProgress(indexJson.seriesId);
+      chapControls.classList.remove('hidden');
+      seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+      renderChips();
+      updateMeta();
+      await loadChapter(0);
     });
 
-    fitToggle.addEventListener('click', ()=>{
-      fit = !fit;
-      fitToggle.textContent = `Fit-to-Width: ${fit? 'ON':'OFF'}`;
-      render();
-    });
-
-    sortSel.addEventListener('change', ()=>{ sortItems(sortSel.value); render(); });
-
-    // Drag & drop
+    // Drag & drop root folder
     ;['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag'); }));
     ;['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag'); }));
     dropzone.addEventListener('drop', async (e)=>{
       const items = e.dataTransfer?.items;
       if (!items || !items.length) return;
-      const files = [];
-      // Prefer webkitGetAsEntry for folder drops in Chromium-based
+      // Try to use DataTransferItem webkitGetAsEntry for folders
+      const entries = [];
       for (const it of items) {
         const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
-        if (entry) {
-          const walk = async (entry) => {
-            if (entry.isFile) {
-              await new Promise((res) => entry.file(f => { files.push(f); res(); }));
-            } else if (entry.isDirectory) {
-              const reader = entry.createReader();
-              await new Promise((res, rej) => reader.readEntries(async (entries) => {
-                for (const e of entries) await walk(e);
-                res();
-              }));
-            }
-          };
-          await walk(entry);
-        }
+        if (entry) entries.push(entry);
       }
-      if (!files.length && e.dataTransfer.files?.length) {
-        // Fallback to plain files list
-        await handleFileList(e.dataTransfer.files);
-      } else {
-        await handleFileList(files);
+      if (!entries.length) return;
+
+      const files = [];
+      const walk = async (entry, prefix='')=>{
+        await new Promise((res)=>{
+          if (entry.isFile){
+            entry.file(f => { f._rel = prefix+f.name; files.push(f); res(); });
+          } else if (entry.isDirectory){
+            const reader = entry.createReader();
+            reader.readEntries(async (ents)=>{
+              for (const e of ents){ await walk(e, prefix+entry.name+'/'); }
+              res();
+            });
+          }
+        });
+      };
+      for (const e of entries){ await walk(e, ''); }
+      const imgFiles = files.filter(f=> IMG_RE.test(f.name));
+      const map = new Map();
+      for (const f of imgFiles){
+        const seg = (f._rel||f.name).split('/');
+        const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []);
+        map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
       }
+      const chapters = [...map.entries()].map(([name, arr])=>{
+        arr.sort((a,b)=> naturalSort(a.rel, b.rel));
+        return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
+      }).sort((a,b)=> naturalSort(a.name,b.name));
+      chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
+      const sid = await sha1('drop|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
+      indexJson = { seriesId: sid, rootName: 'Dropped', chapters, builtAt: Date.now() };
+      saveIndexCache(indexJson);
+
+      continueBtn.disabled = !loadProgress(indexJson.seriesId);
+      chapControls.classList.remove('hidden');
+      seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+      renderChips();
+      updateMeta();
+      await loadChapter(0);
     });
 
-    // Keyboard: F toggles fit
-    window.addEventListener('keydown', (e)=>{ if (e.key==='f' || e.key==='F'){ fitToggle.click(); } });
+    // header actions
+    openBtn.addEventListener('click', pickRoot);
+    continueBtn.addEventListener('click', ()=>{
+      if (!indexJson) return;
+      const p = loadProgress(indexJson.seriesId);
+      if (!p) return;
+      const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
+      if (i>=0){ loadChapter(i).then(()=>{
+        const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
+        if (target) target.scrollIntoView({behavior:'instant', block:'start'});
+      }); }
+    });
+    fitToggle.addEventListener('click', ()=> setFit(!fit));
+    sortSel.addEventListener('change', ()=>{
+      if (!indexJson) return;
+      if (sortSel.value.startsWith('name')){
+        indexJson.chapters.sort((a,b)=> sortSel.value==='name' ? naturalSort(a.name,b.name) : naturalSort(b.name,a.name));
+      }
+      renderChips();
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e)=>{
+      if (e.key==='f' || e.key==='F') setFit(!fit);
+      if (e.key==='ArrowRight') nextBtn.click();
+      if (e.key==='ArrowLeft')  prevBtn.click();
+    });
+
+    // Try register SW if present (optional PWA)
+    if ('serviceWorker' in navigator){
+      fetch('sw.js', {method:'HEAD'}).then(r=>{
+        if (r.ok) navigator.serviceWorker.register('sw.js');
+      }).catch(()=>{});
+    }
   })();
   </script>
 </body>
