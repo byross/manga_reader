@@ -5,17 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Local Webtoon Reader — 100% Size + Chapters + Progress</title>
   <meta name="theme-color" content="#111" />
-  <!-- Optional PWA (install/offline) needs two tiny extra files:
-       1) manifest.webmanifest  2) sw.js
-       This single HTML works standalone without them. If you add those files,
-       the script below will auto-register the service worker. -->
   <link rel="manifest" href="manifest.webmanifest" />
   <style>
     :root { --bg:#0f0f12; --fg:#e8e8ea; --muted:#9aa0a6; --accent:#7dd3fc; }
     * { box-sizing: border-box; }
     html,body { height:100%; }
     body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple Color Emoji, Noto Color Emoji, sans-serif; color:var(--fg); background:var(--bg); }
-    header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:color-mix(in srgb, var(--bg) 85%, transparent); border-bottom:1px solid #22252a; }
+    header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:rgba(15,15,18,.85); border-bottom:1px solid #22252a; }
     .bar { display:flex; gap:.5rem; align-items:center; padding:.75rem 1rem; max-width:1100px; margin:0 auto; }
     .title { font-weight:600; letter-spacing:.3px; }
     .spacer { flex:1; }
@@ -33,7 +29,7 @@
 
     .chapter-list { display:flex; flex-wrap:wrap; gap:.5rem; margin:.5rem 0 1rem; }
     .chip { padding:.35rem .6rem; border:1px solid #2a2e35; border-radius:999px; cursor:pointer; user-select:none; }
-    .chip.active { border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+    .chip.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(125,211,252,.5); }
 
     #reader.fit img.page { width:100%; height:auto; max-width:100%; }
     figure { margin:0 0 24px; }
@@ -73,6 +69,7 @@
       <div class="chapter-list" id="chapters"></div>
     </div>
 
+    <div id="placeholder" class="hint">Select a chapter to start (or press Continue if available).</div>
     <div id="reader"></div>
     <div class="footer hidden" id="navFooter">
       <button id="prevChap">← Prev Chapter</button>
@@ -97,6 +94,7 @@
     const prevBtn = document.getElementById('prevChap');
     const nextBtn = document.getElementById('nextChap');
     const metaEl = document.getElementById('meta');
+    const placeholderEl = document.getElementById('placeholder');
 
     const IMG_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
 
@@ -134,7 +132,6 @@
     }
 
     async function fingerprintRoot(rootHandle, chapters){
-      // Simple fingerprint based on rootName + chapter names + first/last file names/count
       const parts = [rootHandle.name];
       for (const ch of chapters){
         parts.push(ch.name, String(ch.files.length), ch.files[0]||'', ch.files[ch.files.length-1]||'');
@@ -168,7 +165,6 @@
 
     function observeProgress(images, chapter){
       const io = new IntersectionObserver((entries)=>{
-        // Take the most visible nearing viewport as current
         const visible = entries
           .filter(e=>e.isIntersecting)
           .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
@@ -182,6 +178,7 @@
 
     function renderChapter(chapter){
       reader.innerHTML = '';
+      placeholderEl.classList.add('hidden');
       const imgs = [];
       chapter.files.forEach(rel => {
         const fig = document.createElement('figure');
@@ -190,14 +187,11 @@
         img.alt = rel;
         img.setAttribute('data-rel', rel);
         img.loading = 'lazy';
-        // URL.createObjectURL is not available here because we are using relative path from FileSystemHandle
-        // We'll set src later when we have File objects. To keep it simple, we attach a loader per chapter.
         fig.appendChild(img);
         reader.appendChild(fig);
         imgs.push(img);
       });
       updateNavButtons();
-      // Attach observer after src set in loadChapter()
       return imgs;
     }
 
@@ -206,14 +200,11 @@
       renderChips();
       const chapter = indexJson.chapters[idx];
       const imgs = renderChapter(chapter);
-      // We stored in chapter._filesBlob during index build for speed
       for (let i=0;i<imgs.length;i++){
         const f = chapter._filesBlob[i];
         imgs[i].src = URL.createObjectURL(f);
       }
-      // Save initial progress to chapter start
       saveProgress(indexJson.seriesId, chapter.id, chapter.files[0]);
-      // Observe scroll to refine lastFile
       observeProgress(imgs, chapter);
       window.scrollTo({ top:0, behavior:'instant' });
     }
@@ -239,9 +230,7 @@
           }
         }
       }
-      // Sort chapters by folder natural order
       chapters.sort((a,b)=> naturalSort(a.name, b.name));
-      // Assign incremental IDs
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await fingerprintRoot(rootHandle, chapters);
       const idx = { seriesId: sid, rootName: rootHandle.name, chapters, builtAt: Date.now() };
@@ -273,33 +262,21 @@
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
       renderChips();
       updateMeta();
-      // Auto-continue if we have progress
-      const p = loadProgress(indexJson.seriesId);
-      if (p){
-        const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
-        await loadChapter(i>=0? i: 0);
-        // Scroll to last file if present
-        if (p.lastFile){
-          const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
-          if (target) target.scrollIntoView({behavior:'instant', block:'start'});
-        }
-      } else {
-        await loadChapter(0);
-      }
+      reader.innerHTML = '';
+      placeholderEl.classList.remove('hidden');
     }
 
     // Fallback for <input webkitdirectory>
     dirInput.addEventListener('change', async (e)=>{
       const files = [...(e.target.files||[])].filter(f=> IMG_RE.test(f.name));
       if (!files.length) return;
-      // Build pseudo root/chapters by inferring first path segment
       const map = new Map(); // chapName -> files
       for (const f of files){
         const path = f.webkitRelativePath || f.name;
         const seg = path.split('/');
         const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
+        map.get(chap).push({ rel: "+chap+"/"+f.name+", file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
@@ -315,7 +292,8 @@
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
       renderChips();
       updateMeta();
-      await loadChapter(0);
+      reader.innerHTML = '';
+      placeholderEl.classList.remove('hidden');
     });
 
     // Drag & drop root folder
@@ -324,7 +302,6 @@
     dropzone.addEventListener('drop', async (e)=>{
       const items = e.dataTransfer?.items;
       if (!items || !items.length) return;
-      // Try to use DataTransferItem webkitGetAsEntry for folders
       const entries = [];
       for (const it of items) {
         const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
@@ -346,14 +323,14 @@
           }
         });
       };
-      for (const e of entries){ await walk(e, ''); }
+      for (const e2 of entries){ await walk(e2, ''); }
       const imgFiles = files.filter(f=> IMG_RE.test(f.name));
       const map = new Map();
       for (const f of imgFiles){
         const seg = (f._rel||f.name).split('/');
         const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
+        map.get(chap).push({ rel: "+chap+"/"+seg[seg.length-1]+", file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
@@ -369,7 +346,8 @@
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
       renderChips();
       updateMeta();
-      await loadChapter(0);
+      reader.innerHTML = '';
+      placeholderEl.classList.remove('hidden');
     });
 
     // header actions
