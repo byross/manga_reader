@@ -2,78 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Webtoon Reader — Chapters + Per‑Image Progress</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Local Webtoon Reader — App Shell Ready</title>
   <meta name="theme-color" content="#111" />
   <link rel="manifest" href="manifest.webmanifest" />
   <style>
     :root { --bg:#0f0f12; --fg:#e8e8ea; --muted:#9aa0a6; --accent:#7dd3fc; }
     * { box-sizing: border-box; }
     html,body { height:100%; }
-    body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple Color Emoji, Noto Color Emoji, sans-serif; color:var(--fg); background:var(--bg); }
-    header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:rgba(15,15,18,.85); border-bottom:1px solid #22252a; }
-    .bar { display:flex; gap:.5rem; align-items:center; padding:.75rem 1rem; max-width:1100px; margin:0 auto; }
-    .title { font-weight:600; letter-spacing:.3px; }
+    body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Apple Color Emoji,Noto Color Emoji,sans-serif; color:var(--fg); background:var(--bg); padding-bottom: env(safe-area-inset-bottom); }
+    header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:rgba(15,15,18,.85); border-bottom:1px solid #22252a; padding-top: env(safe-area-inset-top); transform: translateY(0); transition: transform .22s ease; }
+    .bar { display:flex; gap:.5rem; align-items:center; padding:.6rem .8rem; max-width:1100px; margin:0 auto; }
+    .title { font-weight:600; letter-spacing:.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .spacer { flex:1; }
-    button, label.btn { appearance:none; border:1px solid #2a2e35; background:#171a1f; color:var(--fg); padding:.55rem .8rem; border-radius:10px; cursor:pointer; box-shadow:0 1px 0 #000 inset; }
+    button, label.btn, select { appearance:none; border:1px solid #2a2e35; background:#171a1f; color:var(--fg); padding:.48rem .65rem; border-radius:10px; cursor:pointer; box-shadow:0 1px 0 #000 inset; }
     button:hover, label.btn:hover { border-color:#3a3f47; }
     button:disabled { opacity:.6; cursor:not-allowed; }
-    select { background:#171a1f; color:var(--fg); border:1px solid #2a2e35; border-radius:10px; padding:.45rem .6rem; }
+    select { padding-right: 1.6rem; }
+    .icon { font-size: 16px; line-height: 1; }
 
-    main { max-width:1100px; margin:0 auto; padding:1rem; }
-    #dropzone { border:2px dashed #2a2e35; border-radius:16px; padding:2rem; text-align:center; color:var(--muted); margin:1rem 0 1.5rem; }
+    main { max-width:1100px; margin:0 auto; padding:0 1rem 1rem; }
+    #dropzone { border:2px dashed #2a2e35; border-radius:16px; padding:1.25rem; text-align:center; color:var(--muted); margin:.75rem 0 1rem; }
     #dropzone.drag { border-color:var(--accent); color:var(--fg); }
 
-    .controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.5rem 0 1rem; }
+    .controls { display:flex; gap:.5rem; align-items:center; margin:.5rem 0 1rem; flex-wrap:wrap; }
     .hint { color:var(--muted); font-size:12px; }
 
-    /* 0px seam: no gaps/borders/backgrounds; collapse line-height */
     #reader { line-height:0; }
     figure { margin:0; padding:0; display:block; }
     img.page { display:block; max-width:none; width:auto; height:auto; image-rendering:auto; background:transparent; margin:0; padding:0; border:0; }
-
-    /* Fit-to-width toggle */
     #reader.fit img.page { width:100%; height:auto; max-width:100%; }
 
-    .footer { text-align:center; margin:1.25rem 0 2rem; }
+    .footer { text-align:center; margin:1rem 0 1.75rem; }
     .hidden { display:none !important; }
+
+    body.immersive header { transform: translateY(calc(-100%)); }
+    body.immersive .footer, body.immersive #dropzone, body.immersive #chapControls { display:none !important; }
+    #uiToggle { position: fixed; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 40; background:#171a1f; border:1px solid #2a2e35; border-radius:999px; padding:.5rem .6rem; opacity:.8; }
+    #uiToggle:hover { opacity:1; }
+
+    @media (max-width: 1024px) {
+      .bar { padding:.5rem .6rem; gap:.35rem; }
+      .title { font-size:14px; }
+      main { max-width:100vw; padding:0; }
+      #dropzone { margin:.5rem; padding:1rem; }
+      #reader.fit img.page { width:100vw; max-width:100vw; }
+      #navFooter { padding: .5rem .75rem; }
+      select, button, label.btn { padding:.44rem .6rem; border-radius:9px; }
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="bar">
-      <div class="title">Local Webtoon Reader · Per‑Image Progress</div>
+      <div class="title">Local Webtoon Reader · App Shell Ready</div>
       <div class="spacer"></div>
-      <label class="btn" id="open-folder">📂 Open Root Folder</label>
+
+      <button id="appPick" class="hidden" title="Pick folder in App">📁</button>
+      <button id="appRefresh" class="hidden" title="Refresh index from App">⟳</button>
+
+      <label class="btn" id="open-folder">📂 Open Folder</label>
       <input id="dir-input" type="file" webkitdirectory directory multiple class="hidden" />
-      <button id="continueBtn" title="Jump to last position" disabled>Continue</button>
-      <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit-to-Width: OFF</button>
-      <select id="sort">
-        <option value="name-desc" selected>Sort: Name (Z→A)</option>
-        <option value="name">Sort: Name (A→Z)</option>
+
+      <button id="continueBtn" title="Jump to last position" disabled>▶︎</button>
+      <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit: OFF</button>
+      <select id="sort" title="Sort chapters">
+        <option value="name-desc" selected>Name Z→A</option>
+        <option value="name">Name A→Z</option>
       </select>
+      <select id="chapterSelect" title="Chapter" class="hidden"></select>
+      <button id="uiToggle" title="Toggle immersive">⤢</button>
     </div>
   </header>
 
   <main>
     <div id="dropzone">
-      <p>Drop a <b>root folder</b> (chapters as subfolders) — or click <b>Open Root Folder</b>。</p>
-      <p>預設 <b>100% 原尺寸</b>，可切換 <b>Fit-to-Width</b>。會自動建立章節索引並在本機記住進度（精準到圖片）。</p>
-      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · Nothing is uploaded — 100% local.</p>
+      <p>Drop a <b>root folder</b> (subfolders = chapters) — or tap <b>📁</b>（App）/ <b>Open Folder</b>（Web）。</p>
+      <p class="hint">預設 <b>Fit-to-Width</b> 於手機／iPad；可切換 100%。圖片無縫 0px 相接；進度精準到圖片。</p>
+      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · 100% local.</p>
     </div>
 
     <div id="meta" class="hint"></div>
 
     <div class="controls hidden" id="chapControls">
       <div class="hint" id="seriesName"></div>
-      <select id="chapterSelect" title="Select chapter"></select>
+      <select id="chapterSelect2" title="Select chapter"></select>
     </div>
 
-    <div id="placeholder" class="hint">Select a chapter to start (or press Continue if available).</div>
+    <div id="placeholder" class="hint">Select a chapter (or press ▶︎ if available).</div>
     <div id="reader"></div>
     <div class="footer hidden" id="navFooter">
-      <button id="prevChap">← Prev Chapter</button>
-      <button id="nextChap">Next Chapter →</button>
+      <button id="prevChap">← Prev</button>
+      <button id="nextChap">Next →</button>
     </div>
   </main>
 
@@ -81,13 +101,17 @@
   ;(() => {
     const dropzone = document.getElementById('dropzone');
     const dirInput = document.getElementById('dir-input');
-    const openBtn = document.getElementById('open-folder');
     const fitToggle = document.getElementById('fitToggle');
     const sortSel = document.getElementById('sort');
     const continueBtn = document.getElementById('continueBtn');
 
+    const appPick = document.getElementById('appPick');
+    const appRefresh = document.getElementById('appRefresh');
+    const uiToggle = document.getElementById('uiToggle');
+
     const chapControls = document.getElementById('chapControls');
     const chapterSelect = document.getElementById('chapterSelect');
+    const chapterSelect2 = document.getElementById('chapterSelect2');
     const seriesNameEl = document.getElementById('seriesName');
     const reader = document.getElementById('reader');
     const navFooter = document.getElementById('navFooter');
@@ -95,67 +119,50 @@
     const nextBtn = document.getElementById('nextChap');
     const metaEl = document.getElementById('meta');
     const placeholderEl = document.getElementById('placeholder');
+    const openBtnEl = document.getElementById('open-folder');
 
-    const IMG_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
+    const IMG_RE = /\\.(jpe?g|png|webp|avif|gif)$/i;
 
-    let fit = false;
-    let indexJson = null; // {seriesId, rootName, chapters: [{id,name,files:[], _filesBlob:File[]}]}
+    let fit = (window.innerWidth <= 1024);
+    let indexJson = null;
     let currentChapterIdx = -1;
+    let appMode = false;
 
-    // ---- storage helpers ----
     const keyIndex = (sid) => `webtoon.index.${sid}`;
     const keyProg  = (sid) => `webtoon.progress.${sid}`;
-
-    function saveIndexCache(obj){ localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj)); }
-    function loadIndexCache(sid){ const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; }
-
-    // Progress precise to image
-    function saveProgress(seriesId, chapterId, fileRelPath) {
-      localStorage.setItem(keyProg(seriesId), JSON.stringify({
-        seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now()
-      }));
+    const saveIndexCache = (obj)=> localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj));
+    const loadIndexCache = (sid)=> { const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; };
+    const saveProgress = (seriesId, chapterId, fileRelPath)=> {
+      localStorage.setItem(keyProg(seriesId), JSON.stringify({ seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now() }));
       continueBtn.disabled = false;
-    }
-    function loadProgress(seriesId) {
-      const raw = localStorage.getItem(keyProg(seriesId));
-      return raw ? JSON.parse(raw) : null;
-    }
+    };
+    const loadProgress = (sid)=> { const raw = localStorage.getItem(keyProg(sid)); return raw? JSON.parse(raw): null; };
 
-    // ---- utilities ----
-    function naturalSort(a,b){
-      return a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' });
-    }
-
-    async function sha1(str){
-      const data = new TextEncoder().encode(str);
-      const buf = await crypto.subtle.digest('SHA-1', data);
-      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-    }
-
+    const naturalSort = (a,b)=> a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' });
+    async function sha1(str){ const data = new TextEncoder().encode(str); const buf = await crypto.subtle.digest('SHA-1', data); return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
     async function fingerprintRoot(rootHandle, chapters){
       const parts = [rootHandle.name];
-      for (const ch of chapters){
-        parts.push(ch.name, String(ch.files.length), ch.files[0]||'', ch.files[ch.files.length-1]||'');
-      }
+      for (const ch of chapters) parts.push(ch.name, String(ch.files.length), ch.files[0]||'', ch.files[ch.files.length-1]||'');
       return await sha1(parts.join('|'));
     }
+    const setFit = (val)=> { fit = val; fitToggle.textContent = `Fit: ${fit? 'ON':'OFF'}`; reader.classList.toggle('fit', fit); };
 
-    function setFit(val){
-      fit = val; fitToggle.textContent = `Fit-to-Width: ${fit? 'ON':'OFF'}`;
-      reader.classList.toggle('fit', fit);
+    function fillDropdowns(){
+      const fill = (sel)=> {
+        sel.innerHTML = '';
+        indexJson.chapters.forEach((ch, i)=> {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = `${ch.name} (${ch.files.length})`;
+          sel.appendChild(opt);
+        });
+        sel.selectedIndex = 0;
+      };
+      fill(chapterSelect);
+      fill(chapterSelect2);
+      chapterSelect.classList.remove('hidden');
     }
-
-    // ---- chapter UI ----
-    function renderDropdown(){
-      chapterSelect.innerHTML = '';
-      indexJson.chapters.forEach((ch, i)=>{
-        const opt = document.createElement('option');
-        opt.value = String(i);
-        opt.textContent = `${ch.name}  (${ch.files.length})`;
-        chapterSelect.appendChild(opt);
-      });
-      chapterSelect.selectedIndex = 0;
-    }
+    function syncDropdowns(idx){ chapterSelect.selectedIndex = idx; chapterSelect2.selectedIndex = idx; }
 
     function updateNavButtons(){
       navFooter.classList.toggle('hidden', currentChapterIdx<0);
@@ -165,49 +172,39 @@
 
     function observeProgress(images, chapter){
       const io = new IntersectionObserver((entries)=>{
-        const visible = entries
-          .filter(e=>e.isIntersecting)
-          .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible){
-          const file = visible.target.getAttribute('data-rel');
-          saveProgress(indexJson.seriesId, chapter.id, file);
-        }
-      }, { root:null, threshold:[0.6, 0.85] });
+        const visible = entries.filter(e=>e.isIntersecting).sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible){ const file = visible.target.getAttribute('data-rel'); saveProgress(indexJson.seriesId, chapter.id, file); }
+      }, { root:null, threshold:[0.55, 0.8] });
       images.forEach(img=> io.observe(img));
     }
 
     function renderChapter(chapter){
-      reader.innerHTML = '';
-      placeholderEl.classList.add('hidden');
+      reader.innerHTML = ''; placeholderEl.classList.add('hidden');
       const imgs = [];
-      chapter.files.forEach(rel => {
+      chapter.files.forEach((rel,i)=>{
         const fig = document.createElement('figure');
         const img = document.createElement('img');
-        img.className = 'page';
-        img.alt = rel;
-        img.setAttribute('data-rel', rel);
-        img.loading = 'lazy';
-        fig.appendChild(img);
-        reader.appendChild(fig);
-        imgs.push(img);
+        img.className = 'page'; img.alt = rel; img.setAttribute('data-rel', rel); img.loading = 'lazy';
+        fig.appendChild(img); reader.appendChild(fig); imgs.push(img);
       });
       updateNavButtons();
       return imgs;
     }
 
     async function loadChapter(idx){
-      currentChapterIdx = idx;
-      chapterSelect.selectedIndex = idx;
+      currentChapterIdx = idx; syncDropdowns(idx);
       const chapter = indexJson.chapters[idx];
       const imgs = renderChapter(chapter);
-      for (let i=0;i<imgs.length;i++){
-        const f = chapter._filesBlob[i];
-        imgs[i].src = URL.createObjectURL(f);
+      if (chapter._filesBlob) {
+        for (let i=0;i<imgs.length;i++){ imgs[i].src = URL.createObjectURL(chapter._filesBlob[i]); }
+      } else if (chapter.filesURL) {
+        for (let i=0;i<imgs.length;i++){ imgs[i].src = chapter.filesURL[i]; }
+      } else {
+        for (let i=0;i<imgs.length;i++){ imgs[i].src = chapter.files[i]; }
       }
       saveProgress(indexJson.seriesId, chapter.id, chapter.files[0]);
       observeProgress(imgs, chapter);
       window.scrollTo({ top:0, behavior:'instant' });
-      // If this chapter equals stored progress, scroll to that image explicitly
       const p = loadProgress(indexJson.seriesId);
       if (p && p.lastChapterId === chapter.id && p.lastFile){
         const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
@@ -217,13 +214,33 @@
 
     prevBtn.addEventListener('click', ()=> { if (currentChapterIdx>0) loadChapter(currentChapterIdx-1); });
     nextBtn.addEventListener('click', ()=> { if (currentChapterIdx<indexJson.chapters.length-1) loadChapter(currentChapterIdx+1); });
-
-    chapterSelect.addEventListener('change', ()=>{
-      const i = Number(chapterSelect.value);
-      if (!Number.isNaN(i)) loadChapter(i);
+    chapterSelect.addEventListener('change', ()=>{ const i = Number(chapterSelect.value); if (!Number.isNaN(i)) loadChapter(i); });
+    chapterSelect2.addEventListener('change', ()=>{ const i = Number(chapterSelect2.value); if (!Number.isNaN(i)) loadChapter(i); });
+    continueBtn.addEventListener('click', ()=>{
+      if (!indexJson) return; const p = loadProgress(indexJson.seriesId); if (!p) return;
+      const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
+      if (i>=0){ loadChapter(i).then(()=>{
+        const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
+        if (target) target.scrollIntoView({behavior:'instant', block:'start'});
+      }); }
     });
+    fitToggle.addEventListener('click', ()=> setFit(!fit));
+    sortSel.addEventListener('change', ()=>{
+      if (!indexJson) return; const desc = sortSel.value==='name-desc';
+      indexJson.chapters.sort((a,b)=> desc? naturalSort(b.name,a.name) : naturalSort(a.name,b.name));
+      fillDropdowns(); syncDropdowns(currentChapterIdx<0?0:currentChapterIdx);
+    });
+    uiToggle.addEventListener('click', ()=> document.body.classList.toggle('immersive'));
 
-    // ---- directory scanning (chapters = subfolders) ----
+    let lastY = window.scrollY; let hidden = false;
+    window.addEventListener('scroll', ()=>{
+      const y = window.scrollY;
+      const delta = y - lastY; lastY = y;
+      if (Math.abs(delta) < 6) return;
+      if (delta > 0 && y > 20 && !hidden){ document.querySelector('header').style.transform = 'translateY(-100%)'; hidden = true; }
+      else if (delta < 0 && hidden){ document.querySelector('header').style.transform = 'translateY(0)'; hidden = false; }
+    }, { passive: true });
+
     async function buildIndexFromHandle(rootHandle){
       const chapters = [];
       for await (const entry of rootHandle.values()){
@@ -241,7 +258,6 @@
           }
         }
       }
-      // Reverse by name (latest first)
       chapters.sort((a,b)=> naturalSort(b.name, a.name));
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await fingerprintRoot(rootHandle, chapters);
@@ -258,13 +274,9 @@
 
     async function pickRoot(){
       if ('showDirectoryPicker' in window) {
-        try{
-          const handle = await window.showDirectoryPicker({ mode: 'read' });
-          await initFromHandle(handle);
-        }catch(err){ if(err && err.name!=='AbortError') alert('Failed to open folder: '+err.message); }
-      } else {
-        dirInput.click();
-      }
+        try{ const handle = await window.showDirectoryPicker({ mode: 'read' }); await initFromHandle(handle); }
+        catch(err){ if(err && err.name!=='AbortError') alert('Failed to open folder: '+err.message); }
+      } else { dirInput.click(); }
     }
 
     async function initFromHandle(handle){
@@ -272,124 +284,89 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderDropdown();
+      fillDropdowns();
       updateMeta();
-      reader.innerHTML = '';
-      placeholderEl.classList.remove('hidden');
+      reader.innerHTML = ''; placeholderEl.classList.remove('hidden');
     }
 
-    // Fallback for <input webkitdirectory>
     dirInput.addEventListener('change', async (e)=>{
-      const files = [...(e.target.files||[])].filter(f=> IMG_RE.test(f.name));
-      if (!files.length) return;
-      const map = new Map(); // chapName -> files
+      const files = [...(e.target.files||[])].filter(f=> IMG_RE.test(f.name)); if (!files.length) return;
+      const map = new Map();
       for (const f of files){
-        const path = f.webkitRelativePath || f.name;
-        const seg = path.split('/');
-        const chap = seg.length>1 ? seg[0] : 'Root';
-        if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
+        const path = f.webkitRelativePath || f.name; const seg = path.split('/'); const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []); map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
-      }).sort((a,b)=> naturalSort(b.name,b.name) || naturalSort(b.name,a.name)); // reverse by name
+      }).sort((a,b)=> naturalSort(b.name,a.name));
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('fallback|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Local', chapters, builtAt: Date.now() };
       saveIndexCache(indexJson);
-
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderDropdown();
-      updateMeta();
-      reader.innerHTML = '';
-      placeholderEl.classList.remove('hidden');
+      fillDropdowns(); updateMeta(); reader.innerHTML=''; placeholderEl.classList.remove('hidden');
     });
 
-    // Drag & drop root folder
-    ;['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag'); }));
-    ;['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag'); }));
+    ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag'); }));
     dropzone.addEventListener('drop', async (e)=>{
-      const items = e.dataTransfer?.items;
-      if (!items || !items.length) return;
-      const entries = [];
-      for (const it of items) {
-        const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
-        if (entry) entries.push(entry);
-      }
+      const items = e.dataTransfer?.items; if (!items || !items.length) return;
+      const entries = []; for (const it of items) { const entry = it.webkitGetAsEntry && it.webkitGetAsEntry(); if (entry) entries.push(entry); }
       if (!entries.length) return;
-
       const files = [];
       const walk = async (entry, prefix='')=>{
         await new Promise((res)=>{
-          if (entry.isFile){
-            entry.file(f => { f._rel = prefix+f.name; files.push(f); res(); });
-          } else if (entry.isDirectory){
-            const reader = entry.createReader();
-            reader.readEntries(async (ents)=>{
-              for (const e2 of ents){ await walk(e2, prefix+entry.name+'/'); }
-              res();
-            });
-          }
+          if (entry.isFile){ entry.file(f => { f._rel = prefix+f.name; files.push(f); res(); }); }
+          else if (entry.isDirectory){ const reader = entry.createReader(); reader.readEntries(async (ents)=>{ for (const e2 of ents){ await walk(e2, prefix+entry.name+'/'); } res(); }); }
         });
       };
       for (const e2 of entries){ await walk(e2, ''); }
       const imgFiles = files.filter(f=> IMG_RE.test(f.name));
       const map = new Map();
       for (const f of imgFiles){
-        const seg = (f._rel||f.name).split('/');
-        const chap = seg.length>1 ? seg[0] : 'Root';
-        if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
+        const seg = (f._rel||f.name).split('/'); const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []); map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
-      }).sort((a,b)=> naturalSort(b.name,a.name)); // reverse by name
+      }).sort((a,b)=> naturalSort(b.name,a.name));
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('drop|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Dropped', chapters, builtAt: Date.now() };
       saveIndexCache(indexJson);
-
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderDropdown();
-      updateMeta();
-      reader.innerHTML = '';
-      placeholderEl.classList.remove('hidden');
+      fillDropdowns(); updateMeta(); reader.innerHTML=''; placeholderEl.classList.remove('hidden');
     });
 
-    // header actions
-    openBtn.addEventListener('click', pickRoot);
-    continueBtn.addEventListener('click', ()=>{
-      if (!indexJson) return;
-      const p = loadProgress(indexJson.seriesId);
-      if (!p) return;
-      const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
-      if (i>=0){ loadChapter(i).then(()=>{
-        const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
-        if (target) target.scrollIntoView({behavior:'instant', block:'start'});
-      }); }
-    });
-    fitToggle.addEventListener('click', ()=> setFit(!fit));
-    sortSel.addEventListener('change', ()=>{
-      if (!indexJson) return;
-      const desc = sortSel.value==='name-desc';
-      indexJson.chapters.sort((a,b)=> desc? naturalSort(b.name,a.name) : naturalSort(a.name,b.name));
-      renderDropdown();
-    });
+    const hasAppBridge = ()=> typeof window.AppBridge === 'object' && typeof window.AppBridge.invoke === 'function';
+    async function initFromAppIndex(indexObj){
+      appMode = true;
+      indexObj.chapters.forEach(ch => { ch.filesURL = ch.files.map(rel => 'appfs:///' + rel); });
+      indexJson = indexObj;
+      continueBtn.disabled = !loadProgress(indexJson.seriesId);
+      chapControls.classList.remove('hidden');
+      seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+      fillDropdowns(); updateMeta(); reader.innerHTML=''; placeholderEl.classList.remove('hidden');
+    }
+    async function appPickFolder(){ try { const idx = await window.AppBridge.invoke('pickFolder', {}); if (idx && !idx.cancelled) await initFromAppIndex(idx); } catch(e){ alert('App pick failed: ' + e); } }
+    async function appRefreshIndex(){ try { const idx = await window.AppBridge.invoke('getIndex', {}); if (idx && idx.seriesId) await initFromAppIndex(idx); } catch(e){} }
 
-    // Shortcuts
-    window.addEventListener('keydown', (e)=>{
-      if (e.key==='f' || e.key==='F') setFit(!fit);
-      if (e.key==='ArrowRight') nextBtn.click();
-      if (e.key==='ArrowLeft')  prevBtn.click();
-    });
+    function setupAppButtons(){
+      const inApp = hasAppBridge();
+      appPick.classList.toggle('hidden', !inApp);
+      appRefresh.classList.toggle('hidden', !inApp);
+      openBtnEl.style.display = inApp ? 'none' : '';
+      if (inApp) { appPick.addEventListener('click', appPickFolder); appRefresh.addEventListener('click', appRefreshIndex); appRefreshIndex(); }
+    }
+    setupAppButtons();
+    setFit(fit);
 
-    // Optional SW
     if ('serviceWorker' in navigator){
       fetch('sw.js', {method:'HEAD'}).then(r=>{ if (r.ok) navigator.serviceWorker.register('sw.js'); }).catch(()=>{});
     }
