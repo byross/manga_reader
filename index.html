@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Webtoon Reader — 100% Size</title>
+  <meta name="theme-color" content="#111" />
+  <style>
+    :root { --bg:#0f0f12; --fg:#e8e8ea; --muted:#9aa0a6; --accent:#7dd3fc; }
+    * { box-sizing: border-box; }
+    html,body { height:100%; }
+    body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Apple Color Emoji, Noto Color Emoji, sans-serif; color:var(--fg); background:var(--bg); }
+    header { position:sticky; top:0; z-index:3; backdrop-filter:saturate(180%) blur(8px); background:color-mix(in srgb, var(--bg) 85%, transparent); border-bottom:1px solid #22252a; }
+    .bar { display:flex; gap:.5rem; align-items:center; padding:.75rem 1rem; max-width:1100px; margin:0 auto; }
+    .title { font-weight:600; letter-spacing:.3px; }
+    .spacer { flex:1; }
+    button, label.btn { appearance:none; border:1px solid #2a2e35; background:#171a1f; color:var(--fg); padding:.55rem .8rem; border-radius:10px; cursor:pointer; box-shadow:0 1px 0 #000 inset; }
+    button:hover, label.btn:hover { border-color:#3a3f47; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    select { background:#171a1f; color:var(--fg); border:1px solid #2a2e35; border-radius:10px; padding:.45rem .6rem; }
+
+    main { max-width:1100px; margin:0 auto; padding:1rem; }
+    #dropzone { border:2px dashed #2a2e35; border-radius:16px; padding:2rem; text-align:center; color:var(--muted); margin:1rem 0 1.5rem; }
+    #dropzone.drag { border-color:var(--accent); color:var(--fg); }
+
+    .grid { display:block; }
+    figure { margin:0 0 24px; }
+    img.page { display:block; max-width:none; height:auto; image-rendering:auto; background:#0b0b0e; border-radius:8px; box-shadow: 0 0 0 1px #1b1f26; }
+
+    .hint { color:var(--muted); font-size:12px; }
+    .hidden { display:none !important; }
+
+    /* 100% size by default; fit-to-width when toggled */
+    .fit img.page { width:100%; height:auto; max-width:100%; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="title">Local Webtoon Reader · 100% size</div>
+      <div class="spacer"></div>
+      <label class="btn" id="open-folder">📂 Open Folder</label>
+      <input id="dir-input" type="file" webkitdirectory directory multiple class="hidden" />
+      <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit-to-Width: OFF</button>
+      <select id="sort">
+        <option value="name">Sort: Name (A→Z)</option>
+        <option value="name-desc">Sort: Name (Z→A)</option>
+        <option value="time">Sort: Time (Old→New)</option>
+        <option value="time-desc">Sort: Time (New→Old)</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <div id="dropzone">
+      <p>Drop a folder or images here — or click <b>Open Folder</b>.<br>Default view is <b>100% original size</b> (no scaling). Toggle <b>Fit-to-Width</b> if needed.</p>
+      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF. Nothing is uploaded — runs 100% locally.</p>
+    </div>
+    <div class="hint" id="count"></div>
+    <div id="container" class="grid"></div>
+  </main>
+
+  <script>
+  ;(() => {
+    const container = document.getElementById('container');
+    const dropzone = document.getElementById('dropzone');
+    const dirInput = document.getElementById('dir-input');
+    const openBtn = document.getElementById('open-folder');
+    const fitToggle = document.getElementById('fitToggle');
+    const sortSel = document.getElementById('sort');
+    const countEl = document.getElementById('count');
+
+    const IMG_EXT = ['.jpg','.jpeg','.png','.gif','.webp','.avif'];
+
+    let items = []; // {name, url, lastModified}
+    let fit = false;
+
+    function ext(name){
+      const i = name.lastIndexOf('.');
+      return i>=0 ? name.slice(i).toLowerCase() : '';
+    }
+    function isImg(name){ return IMG_EXT.includes(ext(name)); }
+
+    function naturalKey(str){
+      return str.toLowerCase().split(/(\d+)/).map(s => (s.match(/^\d+$/) ? Number(s) : s));
+    }
+
+    function sortItems(mode){
+      if(mode==='name') items.sort((a,b)=>naturalKey(a.name) < naturalKey(b.name) ? -1 : 1);
+      else if(mode==='name-desc') items.sort((a,b)=>naturalKey(a.name) > naturalKey(b.name) ? -1 : 1);
+      else if(mode==='time') items.sort((a,b)=> (a.lastModified||0) - (b.lastModified||0));
+      else if(mode==='time-desc') items.sort((a,b)=> (b.lastModified||0) - (a.lastModified||0));
+    }
+
+    function render(){
+      container.classList.toggle('fit', fit);
+      container.innerHTML = '';
+      for(const it of items){
+        const fig = document.createElement('figure');
+        const img = document.createElement('img');
+        img.className = 'page';
+        img.alt = it.name;
+        img.src = it.url;
+        img.loading = 'lazy';
+        fig.appendChild(img);
+        container.appendChild(fig);
+      }
+      countEl.textContent = items.length ? `${items.length} image(s) loaded` : '';
+    }
+
+    async function readFromDirectoryHandle(dirHandle){
+      const out = [];
+      for await (const entry of dirHandle.values()){
+        try{
+          if(entry.kind === 'file'){
+            if(isImg(entry.name)){
+              const file = await entry.getFile();
+              out.push({ name: entry.name, url: URL.createObjectURL(file), lastModified: file.lastModified });
+            }
+          } else if (entry.kind === 'directory') {
+            // recurse one level (optional). Comment out if you want flat only.
+            out.push(...await readFromDirectoryHandle(entry));
+          }
+        }catch(err){ console.warn('Skip entry error:', err); }
+      }
+      return out;
+    }
+
+    async function pickDirectory(){
+      if ('showDirectoryPicker' in window) {
+        try{
+          const handle = await window.showDirectoryPicker({ mode: 'read' });
+          items = await readFromDirectoryHandle(handle);
+          sortItems(sortSel.value);
+          render();
+        }catch(err){ if(err && err.name!=='AbortError') alert('Failed to open folder: '+err.message); }
+      } else {
+        // Fallback: trigger <input webkitdirectory>
+        dirInput.click();
+      }
+    }
+
+    async function handleFileList(fileList){
+      const out = [];
+      for (const file of fileList) {
+        if (isImg(file.name)) out.push({ name: file.webkitRelativePath || file.name, url: URL.createObjectURL(file), lastModified: file.lastModified });
+      }
+      items = out;
+      sortItems(sortSel.value);
+      render();
+    }
+
+    // UI events
+    openBtn.addEventListener('click', pickDirectory);
+
+    dirInput.addEventListener('change', (e)=>{
+      if (e.target.files && e.target.files.length) handleFileList(e.target.files);
+    });
+
+    fitToggle.addEventListener('click', ()=>{
+      fit = !fit;
+      fitToggle.textContent = `Fit-to-Width: ${fit? 'ON':'OFF'}`;
+      render();
+    });
+
+    sortSel.addEventListener('change', ()=>{ sortItems(sortSel.value); render(); });
+
+    // Drag & drop
+    ;['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag'); }));
+    ;['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag'); }));
+    dropzone.addEventListener('drop', async (e)=>{
+      const items = e.dataTransfer?.items;
+      if (!items || !items.length) return;
+      const files = [];
+      // Prefer webkitGetAsEntry for folder drops in Chromium-based
+      for (const it of items) {
+        const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
+        if (entry) {
+          const walk = async (entry) => {
+            if (entry.isFile) {
+              await new Promise((res) => entry.file(f => { files.push(f); res(); }));
+            } else if (entry.isDirectory) {
+              const reader = entry.createReader();
+              await new Promise((res, rej) => reader.readEntries(async (entries) => {
+                for (const e of entries) await walk(e);
+                res();
+              }));
+            }
+          };
+          await walk(entry);
+        }
+      }
+      if (!files.length && e.dataTransfer.files?.length) {
+        // Fallback to plain files list
+        await handleFileList(e.dataTransfer.files);
+      } else {
+        await handleFileList(files);
+      }
+    });
+
+    // Keyboard: F toggles fit
+    window.addEventListener('keydown', (e)=>{ if (e.key==='f' || e.key==='F'){ fitToggle.click(); } });
+  })();
+  </script>
+</body>
+</html>
