@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+<<<<<<< HEAD
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Local Webtoon Reader — App Shell Ready</title>
+=======
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Webtoon Reader — Chapters + Per‑Image Progress</title>
+>>>>>>> 95519cd (更新精準度！)
   <meta name="theme-color" content="#111" />
   <link rel="manifest" href="manifest.webmanifest" />
   <style>
@@ -28,9 +33,18 @@
     .controls { display:flex; gap:.5rem; align-items:center; margin:.5rem 0 1rem; flex-wrap:wrap; }
     .hint { color:var(--muted); font-size:12px; }
 
+<<<<<<< HEAD
     #reader { line-height:0; }
     figure { margin:0; padding:0; display:block; }
     img.page { display:block; max-width:none; width:auto; height:auto; image-rendering:auto; background:transparent; margin:0; padding:0; border:0; }
+=======
+    /* 0px seam: no gaps/borders/backgrounds; collapse line-height */
+    #reader { line-height:0; }
+    figure { margin:0; padding:0; display:block; }
+    img.page { display:block; max-width:none; width:auto; height:auto; image-rendering:auto; background:transparent; margin:0; padding:0; border:0; }
+
+    /* Fit-to-width toggle */
+>>>>>>> 95519cd (更新精準度！)
     #reader.fit img.page { width:100%; height:auto; max-width:100%; }
 
     .footer { text-align:center; margin:1rem 0 1.75rem; }
@@ -55,7 +69,11 @@
 <body>
   <header>
     <div class="bar">
+<<<<<<< HEAD
       <div class="title">Local Webtoon Reader · App Shell Ready</div>
+=======
+      <div class="title">Local Webtoon Reader · Per‑Image Progress</div>
+>>>>>>> 95519cd (更新精準度！)
       <div class="spacer"></div>
 
       <button id="appPick" class="hidden" title="Pick folder in App">📁</button>
@@ -63,12 +81,20 @@
 
       <label class="btn" id="open-folder">📂 Open Folder</label>
       <input id="dir-input" type="file" webkitdirectory directory multiple class="hidden" />
+<<<<<<< HEAD
 
       <button id="continueBtn" title="Jump to last position" disabled>▶︎</button>
       <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit: OFF</button>
       <select id="sort" title="Sort chapters">
         <option value="name-desc" selected>Name Z→A</option>
         <option value="name">Name A→Z</option>
+=======
+      <button id="continueBtn" title="Jump to last position" disabled>Continue</button>
+      <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit-to-Width: OFF</button>
+      <select id="sort">
+        <option value="name-desc" selected>Sort: Name (Z→A)</option>
+        <option value="name">Sort: Name (A→Z)</option>
+>>>>>>> 95519cd (更新精準度！)
       </select>
       <select id="chapterSelect" title="Chapter" class="hidden"></select>
       <button id="uiToggle" title="Toggle immersive">⤢</button>
@@ -77,16 +103,26 @@
 
   <main>
     <div id="dropzone">
+<<<<<<< HEAD
       <p>Drop a <b>root folder</b> (subfolders = chapters) — or tap <b>📁</b>（App）/ <b>Open Folder</b>（Web）。</p>
       <p class="hint">預設 <b>Fit-to-Width</b> 於手機／iPad；可切換 100%。圖片無縫 0px 相接；進度精準到圖片。</p>
       <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · 100% local.</p>
+=======
+      <p>Drop a <b>root folder</b> (chapters as subfolders) — or click <b>Open Root Folder</b>。</p>
+      <p>預設 <b>100% 原尺寸</b>，可切換 <b>Fit-to-Width</b>。會自動建立章節索引並在本機記住進度（精準到圖片）。</p>
+      <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · Nothing is uploaded — 100% local.</p>
+>>>>>>> 95519cd (更新精準度！)
     </div>
 
     <div id="meta" class="hint"></div>
 
     <div class="controls hidden" id="chapControls">
       <div class="hint" id="seriesName"></div>
+<<<<<<< HEAD
       <select id="chapterSelect2" title="Select chapter"></select>
+=======
+      <select id="chapterSelect" title="Select chapter"></select>
+>>>>>>> 95519cd (更新精準度！)
     </div>
 
     <div id="placeholder" class="hint">Select a chapter (or press ▶︎ if available).</div>
@@ -111,7 +147,10 @@
 
     const chapControls = document.getElementById('chapControls');
     const chapterSelect = document.getElementById('chapterSelect');
+<<<<<<< HEAD
     const chapterSelect2 = document.getElementById('chapterSelect2');
+=======
+>>>>>>> 95519cd (更新精準度！)
     const seriesNameEl = document.getElementById('seriesName');
     const reader = document.getElementById('reader');
     const navFooter = document.getElementById('navFooter');
@@ -123,17 +162,34 @@
 
     const IMG_RE = /\\.(jpe?g|png|webp|avif|gif)$/i;
 
+<<<<<<< HEAD
     let fit = (window.innerWidth <= 1024);
     let indexJson = null;
+=======
+    let fit = false;
+    let indexJson = null; // {seriesId, rootName, chapters: [{id,name,files:[], _filesBlob:File[]}]}
+>>>>>>> 95519cd (更新精準度！)
     let currentChapterIdx = -1;
     let appMode = false;
 
     const keyIndex = (sid) => `webtoon.index.${sid}`;
     const keyProg  = (sid) => `webtoon.progress.${sid}`;
+<<<<<<< HEAD
     const saveIndexCache = (obj)=> localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj));
     const loadIndexCache = (sid)=> { const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; };
     const saveProgress = (seriesId, chapterId, fileRelPath)=> {
       localStorage.setItem(keyProg(seriesId), JSON.stringify({ seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now() }));
+=======
+
+    function saveIndexCache(obj){ localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj)); }
+    function loadIndexCache(sid){ const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; }
+
+    // Progress precise to image
+    function saveProgress(seriesId, chapterId, fileRelPath) {
+      localStorage.setItem(keyProg(seriesId), JSON.stringify({
+        seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now()
+      }));
+>>>>>>> 95519cd (更新精準度！)
       continueBtn.disabled = false;
     };
     const loadProgress = (sid)=> { const raw = localStorage.getItem(keyProg(sid)); return raw? JSON.parse(raw): null; };
@@ -147,6 +203,7 @@
     }
     const setFit = (val)=> { fit = val; fitToggle.textContent = `Fit: ${fit? 'ON':'OFF'}`; reader.classList.toggle('fit', fit); };
 
+<<<<<<< HEAD
     function fillDropdowns(){
       const fill = (sel)=> {
         sel.innerHTML = '';
@@ -161,6 +218,23 @@
       fill(chapterSelect);
       fill(chapterSelect2);
       chapterSelect.classList.remove('hidden');
+=======
+    function setFit(val){
+      fit = val; fitToggle.textContent = `Fit-to-Width: ${fit? 'ON':'OFF'}`;
+      reader.classList.toggle('fit', fit);
+    }
+
+    // ---- chapter UI ----
+    function renderDropdown(){
+      chapterSelect.innerHTML = '';
+      indexJson.chapters.forEach((ch, i)=>{
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = `${ch.name}  (${ch.files.length})`;
+        chapterSelect.appendChild(opt);
+      });
+      chapterSelect.selectedIndex = 0;
+>>>>>>> 95519cd (更新精準度！)
     }
     function syncDropdowns(idx){ chapterSelect.selectedIndex = idx; chapterSelect2.selectedIndex = idx; }
 
@@ -172,9 +246,20 @@
 
     function observeProgress(images, chapter){
       const io = new IntersectionObserver((entries)=>{
+<<<<<<< HEAD
         const visible = entries.filter(e=>e.isIntersecting).sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
         if (visible){ const file = visible.target.getAttribute('data-rel'); saveProgress(indexJson.seriesId, chapter.id, file); }
       }, { root:null, threshold:[0.55, 0.8] });
+=======
+        const visible = entries
+          .filter(e=>e.isIntersecting)
+          .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible){
+          const file = visible.target.getAttribute('data-rel');
+          saveProgress(indexJson.seriesId, chapter.id, file);
+        }
+      }, { root:null, threshold:[0.6, 0.85] });
+>>>>>>> 95519cd (更新精準度！)
       images.forEach(img=> io.observe(img));
     }
 
@@ -192,7 +277,12 @@
     }
 
     async function loadChapter(idx){
+<<<<<<< HEAD
       currentChapterIdx = idx; syncDropdowns(idx);
+=======
+      currentChapterIdx = idx;
+      chapterSelect.selectedIndex = idx;
+>>>>>>> 95519cd (更新精準度！)
       const chapter = indexJson.chapters[idx];
       const imgs = renderChapter(chapter);
       if (chapter._filesBlob) {
@@ -205,6 +295,10 @@
       saveProgress(indexJson.seriesId, chapter.id, chapter.files[0]);
       observeProgress(imgs, chapter);
       window.scrollTo({ top:0, behavior:'instant' });
+<<<<<<< HEAD
+=======
+      // If this chapter equals stored progress, scroll to that image explicitly
+>>>>>>> 95519cd (更新精準度！)
       const p = loadProgress(indexJson.seriesId);
       if (p && p.lastChapterId === chapter.id && p.lastFile){
         const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
@@ -241,6 +335,15 @@
       else if (delta < 0 && hidden){ document.querySelector('header').style.transform = 'translateY(0)'; hidden = false; }
     }, { passive: true });
 
+<<<<<<< HEAD
+=======
+    chapterSelect.addEventListener('change', ()=>{
+      const i = Number(chapterSelect.value);
+      if (!Number.isNaN(i)) loadChapter(i);
+    });
+
+    // ---- directory scanning (chapters = subfolders) ----
+>>>>>>> 95519cd (更新精準度！)
     async function buildIndexFromHandle(rootHandle){
       const chapters = [];
       for await (const entry of rootHandle.values()){
@@ -258,6 +361,10 @@
           }
         }
       }
+<<<<<<< HEAD
+=======
+      // Reverse by name (latest first)
+>>>>>>> 95519cd (更新精準度！)
       chapters.sort((a,b)=> naturalSort(b.name, a.name));
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await fingerprintRoot(rootHandle, chapters);
@@ -284,7 +391,11 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+<<<<<<< HEAD
       fillDropdowns();
+=======
+      renderDropdown();
+>>>>>>> 95519cd (更新精準度！)
       updateMeta();
       reader.innerHTML = ''; placeholderEl.classList.remove('hidden');
     }
@@ -293,13 +404,25 @@
       const files = [...(e.target.files||[])].filter(f=> IMG_RE.test(f.name)); if (!files.length) return;
       const map = new Map();
       for (const f of files){
+<<<<<<< HEAD
         const path = f.webkitRelativePath || f.name; const seg = path.split('/'); const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []); map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
+=======
+        const path = f.webkitRelativePath || f.name;
+        const seg = path.split('/');
+        const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []);
+        map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
+>>>>>>> 95519cd (更新精準度！)
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
+<<<<<<< HEAD
       }).sort((a,b)=> naturalSort(b.name,a.name));
+=======
+      }).sort((a,b)=> naturalSort(b.name,b.name) || naturalSort(b.name,a.name)); // reverse by name
+>>>>>>> 95519cd (更新精準度！)
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('fallback|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Local', chapters, builtAt: Date.now() };
@@ -307,7 +430,14 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+<<<<<<< HEAD
       fillDropdowns(); updateMeta(); reader.innerHTML=''; placeholderEl.classList.remove('hidden');
+=======
+      renderDropdown();
+      updateMeta();
+      reader.innerHTML = '';
+      placeholderEl.classList.remove('hidden');
+>>>>>>> 95519cd (更新精準度！)
     });
 
     ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag'); }));
@@ -319,21 +449,44 @@
       const files = [];
       const walk = async (entry, prefix='')=>{
         await new Promise((res)=>{
+<<<<<<< HEAD
           if (entry.isFile){ entry.file(f => { f._rel = prefix+f.name; files.push(f); res(); }); }
           else if (entry.isDirectory){ const reader = entry.createReader(); reader.readEntries(async (ents)=>{ for (const e2 of ents){ await walk(e2, prefix+entry.name+'/'); } res(); }); }
+=======
+          if (entry.isFile){
+            entry.file(f => { f._rel = prefix+f.name; files.push(f); res(); });
+          } else if (entry.isDirectory){
+            const reader = entry.createReader();
+            reader.readEntries(async (ents)=>{
+              for (const e2 of ents){ await walk(e2, prefix+entry.name+'/'); }
+              res();
+            });
+          }
+>>>>>>> 95519cd (更新精準度！)
         });
       };
       for (const e2 of entries){ await walk(e2, ''); }
       const imgFiles = files.filter(f=> IMG_RE.test(f.name));
       const map = new Map();
       for (const f of imgFiles){
+<<<<<<< HEAD
         const seg = (f._rel||f.name).split('/'); const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []); map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
+=======
+        const seg = (f._rel||f.name).split('/');
+        const chap = seg.length>1 ? seg[0] : 'Root';
+        if (!map.has(chap)) map.set(chap, []);
+        map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
+>>>>>>> 95519cd (更新精準度！)
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
+<<<<<<< HEAD
       }).sort((a,b)=> naturalSort(b.name,a.name));
+=======
+      }).sort((a,b)=> naturalSort(b.name,a.name)); // reverse by name
+>>>>>>> 95519cd (更新精準度！)
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('drop|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Dropped', chapters, builtAt: Date.now() };
@@ -341,6 +494,7 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
+<<<<<<< HEAD
       fillDropdowns(); updateMeta(); reader.innerHTML=''; placeholderEl.classList.remove('hidden');
     });
 
@@ -367,6 +521,42 @@
     setupAppButtons();
     setFit(fit);
 
+=======
+      renderDropdown();
+      updateMeta();
+      reader.innerHTML = '';
+      placeholderEl.classList.remove('hidden');
+    });
+
+    // header actions
+    openBtn.addEventListener('click', pickRoot);
+    continueBtn.addEventListener('click', ()=>{
+      if (!indexJson) return;
+      const p = loadProgress(indexJson.seriesId);
+      if (!p) return;
+      const i = indexJson.chapters.findIndex(c=> c.id===p.lastChapterId);
+      if (i>=0){ loadChapter(i).then(()=>{
+        const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
+        if (target) target.scrollIntoView({behavior:'instant', block:'start'});
+      }); }
+    });
+    fitToggle.addEventListener('click', ()=> setFit(!fit));
+    sortSel.addEventListener('change', ()=>{
+      if (!indexJson) return;
+      const desc = sortSel.value==='name-desc';
+      indexJson.chapters.sort((a,b)=> desc? naturalSort(b.name,a.name) : naturalSort(a.name,b.name));
+      renderDropdown();
+    });
+
+    // Shortcuts
+    window.addEventListener('keydown', (e)=>{
+      if (e.key==='f' || e.key==='F') setFit(!fit);
+      if (e.key==='ArrowRight') nextBtn.click();
+      if (e.key==='ArrowLeft')  prevBtn.click();
+    });
+
+    // Optional SW
+>>>>>>> 95519cd (更新精準度！)
     if ('serviceWorker' in navigator){
       fetch('sw.js', {method:'HEAD'}).then(r=>{ if (r.ok) navigator.serviceWorker.register('sw.js'); }).catch(()=>{});
     }
