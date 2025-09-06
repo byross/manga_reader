@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Webtoon Reader — 100% Size + Chapters + Progress</title>
+  <title>Local Webtoon Reader — Chapters + Per‑Image Progress</title>
   <meta name="theme-color" content="#111" />
   <link rel="manifest" href="manifest.webmanifest" />
   <style>
@@ -27,13 +27,13 @@
     .controls { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.5rem 0 1rem; }
     .hint { color:var(--muted); font-size:12px; }
 
-    .chapter-list { display:flex; flex-wrap:wrap; gap:.5rem; margin:.5rem 0 1rem; }
-    .chip { padding:.35rem .6rem; border:1px solid #2a2e35; border-radius:999px; cursor:pointer; user-select:none; }
-    .chip.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(125,211,252,.5); }
+    /* 0px seam: no gaps/borders/backgrounds; collapse line-height */
+    #reader { line-height:0; }
+    figure { margin:0; padding:0; display:block; }
+    img.page { display:block; max-width:none; width:auto; height:auto; image-rendering:auto; background:transparent; margin:0; padding:0; border:0; }
 
+    /* Fit-to-width toggle */
     #reader.fit img.page { width:100%; height:auto; max-width:100%; }
-    figure { margin:0 0 24px; }
-    img.page { display:block; max-width:none; height:auto; image-rendering:auto; background:#0b0b0e; border-radius:8px; box-shadow: 0 0 0 1px #1b1f26; }
 
     .footer { text-align:center; margin:1.25rem 0 2rem; }
     .hidden { display:none !important; }
@@ -42,15 +42,15 @@
 <body>
   <header>
     <div class="bar">
-      <div class="title">Local Webtoon Reader · Chapters + Progress</div>
+      <div class="title">Local Webtoon Reader · Per‑Image Progress</div>
       <div class="spacer"></div>
       <label class="btn" id="open-folder">📂 Open Root Folder</label>
       <input id="dir-input" type="file" webkitdirectory directory multiple class="hidden" />
       <button id="continueBtn" title="Jump to last position" disabled>Continue</button>
       <button id="fitToggle" title="Toggle Fit-to-Width / 100%">Fit-to-Width: OFF</button>
       <select id="sort">
+        <option value="name-desc" selected>Sort: Name (Z→A)</option>
         <option value="name">Sort: Name (A→Z)</option>
-        <option value="name-desc">Sort: Name (Z→A)</option>
       </select>
     </div>
   </header>
@@ -58,7 +58,7 @@
   <main>
     <div id="dropzone">
       <p>Drop a <b>root folder</b> (chapters as subfolders) — or click <b>Open Root Folder</b>。</p>
-      <p>預設 <b>100% 原尺寸</b>，可切換 <b>Fit-to-Width</b>。會自動建立章節索引並在本機記住進度（localStorage）。</p>
+      <p>預設 <b>100% 原尺寸</b>，可切換 <b>Fit-to-Width</b>。會自動建立章節索引並在本機記住進度（精準到圖片）。</p>
       <p class="hint">Supported: JPG, PNG, WebP, AVIF, GIF · Nothing is uploaded — 100% local.</p>
     </div>
 
@@ -66,7 +66,7 @@
 
     <div class="controls hidden" id="chapControls">
       <div class="hint" id="seriesName"></div>
-      <div class="chapter-list" id="chapters"></div>
+      <select id="chapterSelect" title="Select chapter"></select>
     </div>
 
     <div id="placeholder" class="hint">Select a chapter to start (or press Continue if available).</div>
@@ -87,7 +87,7 @@
     const continueBtn = document.getElementById('continueBtn');
 
     const chapControls = document.getElementById('chapControls');
-    const chaptersEl = document.getElementById('chapters');
+    const chapterSelect = document.getElementById('chapterSelect');
     const seriesNameEl = document.getElementById('seriesName');
     const reader = document.getElementById('reader');
     const navFooter = document.getElementById('navFooter');
@@ -99,7 +99,7 @@
     const IMG_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
 
     let fit = false;
-    let indexJson = null; // {seriesId, rootName, chapters: [{id,name,files:[]}]}
+    let indexJson = null; // {seriesId, rootName, chapters: [{id,name,files:[], _filesBlob:File[]}]}
     let currentChapterIdx = -1;
 
     // ---- storage helpers ----
@@ -109,6 +109,7 @@
     function saveIndexCache(obj){ localStorage.setItem(keyIndex(obj.seriesId), JSON.stringify(obj)); }
     function loadIndexCache(sid){ const r = localStorage.getItem(keyIndex(sid)); return r? JSON.parse(r): null; }
 
+    // Progress precise to image
     function saveProgress(seriesId, chapterId, fileRelPath) {
       localStorage.setItem(keyProg(seriesId), JSON.stringify({
         seriesId, lastChapterId: chapterId, lastFile: fileRelPath, updatedAt: Date.now()
@@ -144,17 +145,16 @@
       reader.classList.toggle('fit', fit);
     }
 
-    // ---- chapter rendering ----
-    function renderChips(){
-      chaptersEl.innerHTML = '';
+    // ---- chapter UI ----
+    function renderDropdown(){
+      chapterSelect.innerHTML = '';
       indexJson.chapters.forEach((ch, i)=>{
-        const chip = document.createElement('div');
-        chip.className = 'chip' + (i===currentChapterIdx ? ' active':'');
-        chip.textContent = ch.name;
-        chip.title = `${ch.files.length} page(s)`;
-        chip.addEventListener('click', ()=>loadChapter(i));
-        chaptersEl.appendChild(chip);
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = `${ch.name}  (${ch.files.length})`;
+        chapterSelect.appendChild(opt);
       });
+      chapterSelect.selectedIndex = 0;
     }
 
     function updateNavButtons(){
@@ -172,7 +172,7 @@
           const file = visible.target.getAttribute('data-rel');
           saveProgress(indexJson.seriesId, chapter.id, file);
         }
-      }, { root:null, threshold:[0.5, 0.75] });
+      }, { root:null, threshold:[0.6, 0.85] });
       images.forEach(img=> io.observe(img));
     }
 
@@ -197,7 +197,7 @@
 
     async function loadChapter(idx){
       currentChapterIdx = idx;
-      renderChips();
+      chapterSelect.selectedIndex = idx;
       const chapter = indexJson.chapters[idx];
       const imgs = renderChapter(chapter);
       for (let i=0;i<imgs.length;i++){
@@ -207,10 +207,21 @@
       saveProgress(indexJson.seriesId, chapter.id, chapter.files[0]);
       observeProgress(imgs, chapter);
       window.scrollTo({ top:0, behavior:'instant' });
+      // If this chapter equals stored progress, scroll to that image explicitly
+      const p = loadProgress(indexJson.seriesId);
+      if (p && p.lastChapterId === chapter.id && p.lastFile){
+        const target = reader.querySelector(`img[data-rel="${CSS.escape(p.lastFile)}"]`);
+        if (target) target.scrollIntoView({behavior:'instant', block:'start'});
+      }
     }
 
     prevBtn.addEventListener('click', ()=> { if (currentChapterIdx>0) loadChapter(currentChapterIdx-1); });
     nextBtn.addEventListener('click', ()=> { if (currentChapterIdx<indexJson.chapters.length-1) loadChapter(currentChapterIdx+1); });
+
+    chapterSelect.addEventListener('change', ()=>{
+      const i = Number(chapterSelect.value);
+      if (!Number.isNaN(i)) loadChapter(i);
+    });
 
     // ---- directory scanning (chapters = subfolders) ----
     async function buildIndexFromHandle(rootHandle){
@@ -230,7 +241,8 @@
           }
         }
       }
-      chapters.sort((a,b)=> naturalSort(a.name, b.name));
+      // Reverse by name (latest first)
+      chapters.sort((a,b)=> naturalSort(b.name, a.name));
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await fingerprintRoot(rootHandle, chapters);
       const idx = { seriesId: sid, rootName: rootHandle.name, chapters, builtAt: Date.now() };
@@ -260,7 +272,7 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderChips();
+      renderDropdown();
       updateMeta();
       reader.innerHTML = '';
       placeholderEl.classList.remove('hidden');
@@ -276,12 +288,12 @@
         const seg = path.split('/');
         const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: "+chap+"/"+f.name+", file: f });
+        map.get(chap).push({ rel: `${chap}/${f.name}`, file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
-      }).sort((a,b)=> naturalSort(a.name,b.name));
+      }).sort((a,b)=> naturalSort(b.name,b.name) || naturalSort(b.name,a.name)); // reverse by name
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('fallback|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Local', chapters, builtAt: Date.now() };
@@ -290,7 +302,7 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderChips();
+      renderDropdown();
       updateMeta();
       reader.innerHTML = '';
       placeholderEl.classList.remove('hidden');
@@ -317,7 +329,7 @@
           } else if (entry.isDirectory){
             const reader = entry.createReader();
             reader.readEntries(async (ents)=>{
-              for (const e of ents){ await walk(e, prefix+entry.name+'/'); }
+              for (const e2 of ents){ await walk(e2, prefix+entry.name+'/'); }
               res();
             });
           }
@@ -330,12 +342,12 @@
         const seg = (f._rel||f.name).split('/');
         const chap = seg.length>1 ? seg[0] : 'Root';
         if (!map.has(chap)) map.set(chap, []);
-        map.get(chap).push({ rel: "+chap+"/"+seg[seg.length-1]+", file: f });
+        map.get(chap).push({ rel: `${chap}/${seg[seg.length-1]}`, file: f });
       }
       const chapters = [...map.entries()].map(([name, arr])=>{
         arr.sort((a,b)=> naturalSort(a.rel, b.rel));
         return { id:'', name, files: arr.map(x=>x.rel), _filesBlob: arr.map(x=>x.file) };
-      }).sort((a,b)=> naturalSort(a.name,b.name));
+      }).sort((a,b)=> naturalSort(b.name,a.name)); // reverse by name
       chapters.forEach((ch,i)=> ch.id = `ch_${String(i+1).padStart(3,'0')}`);
       const sid = await sha1('drop|' + chapters.map(c=>c.name+':'+c.files.length).join('|'));
       indexJson = { seriesId: sid, rootName: 'Dropped', chapters, builtAt: Date.now() };
@@ -344,7 +356,7 @@
       continueBtn.disabled = !loadProgress(indexJson.seriesId);
       chapControls.classList.remove('hidden');
       seriesNameEl.textContent = `Series: ${indexJson.rootName}`;
-      renderChips();
+      renderDropdown();
       updateMeta();
       reader.innerHTML = '';
       placeholderEl.classList.remove('hidden');
@@ -365,24 +377,21 @@
     fitToggle.addEventListener('click', ()=> setFit(!fit));
     sortSel.addEventListener('change', ()=>{
       if (!indexJson) return;
-      if (sortSel.value.startsWith('name')){
-        indexJson.chapters.sort((a,b)=> sortSel.value==='name' ? naturalSort(a.name,b.name) : naturalSort(b.name,a.name));
-      }
-      renderChips();
+      const desc = sortSel.value==='name-desc';
+      indexJson.chapters.sort((a,b)=> desc? naturalSort(b.name,a.name) : naturalSort(a.name,b.name));
+      renderDropdown();
     });
 
-    // Keyboard shortcuts
+    // Shortcuts
     window.addEventListener('keydown', (e)=>{
       if (e.key==='f' || e.key==='F') setFit(!fit);
       if (e.key==='ArrowRight') nextBtn.click();
       if (e.key==='ArrowLeft')  prevBtn.click();
     });
 
-    // Try register SW if present (optional PWA)
+    // Optional SW
     if ('serviceWorker' in navigator){
-      fetch('sw.js', {method:'HEAD'}).then(r=>{
-        if (r.ok) navigator.serviceWorker.register('sw.js');
-      }).catch(()=>{});
+      fetch('sw.js', {method:'HEAD'}).then(r=>{ if (r.ok) navigator.serviceWorker.register('sw.js'); }).catch(()=>{});
     }
   })();
   </script>
